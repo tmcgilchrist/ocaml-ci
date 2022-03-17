@@ -19,7 +19,11 @@ let platforms =
   in
   let v2_0 = Ocaml_ci_service.Conf.platforms `V2_0 in
   let v2_1 = Ocaml_ci_service.Conf.platforms `V2_1 in
-  Current.list_seq (List.map v (v2_0 @ v2_1))
+  (* NOTE Only build on ARM and x86 available in Tezos cluster. *)
+  let plaform_list = List.filter (fun x -> match x.Ocaml_ci_service.Conf.arch with
+      | `X86_64 | `I386 | `Aarch32 | `Aarch64 | `S390x -> true
+      |_ -> false) (v2_0 @ v2_1) in
+  Current.list_seq (List.map v plaform_list)
 
 let program_name = "ocaml-ci-gitlab"
 
@@ -36,6 +40,9 @@ let opam_repository_commit =
 let gitlab_repos : Gitlab.Repo_id.t list = [
   { Gitlab.Repo_id.owner = "tmcgilchrist"; Gitlab.Repo_id.name = "ocaml-gitlab"; project_id = 29798678 }
 ; { Gitlab.Repo_id.owner = "tmcgilchrist"; Gitlab.Repo_id.name = "ocaml-changes"; project_id = 30953712 }
+; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "resto"; project_id = 16269987}  
+; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "data-encoding"; project_id = 14134943}  
+; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "json-data-encoding"; project_id = 16489740}  
 ]
 
 (* Fake Installation module, we don't have this in GitLab. *)
@@ -44,6 +51,10 @@ module Installation = struct
   let compare = compare
   let pp f t = Fmt.string f t.name
 end
+
+(* TODO Installations should be derived from gitlab_repos or Index/DB table. *)
+let gitlab_installations = [ {Installation.name = "tmcgilchrist"}
+                           ; {Installation.name = "nomadic-labs"}]
 
 let set_active_installations (accounts : Installation.t list Current.t) =
   let+ accounts = accounts in
@@ -181,7 +192,7 @@ let v ?ocluster ~app ~solver () =
   let ocluster = Option.map (Cluster_build.config ~timeout:(Duration.of_hour 1)) ocluster in
   Current.with_context opam_repository_commit @@ fun () ->
   Current.with_context platforms @@ fun () ->
-  let installations = Current.return [{Installation.name = "tmcgilchrist"}] |> set_active_installations in
+  let installations = Current.return gitlab_installations |> set_active_installations in
   installations |> Current.list_iter ~collapse_key:"org" (module Installation) @@ fun installation ->
   let repos = repositories installation |> set_active_repos ~installation in
   repos |> Current.list_iter ~collapse_key:"repo" (module Gitlab.Repo_id) @@ fun repo ->

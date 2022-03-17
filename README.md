@@ -121,6 +121,19 @@ least the first 6 characters. e.g.
 $ ocaml-ci mirage/irmin pull/867 alpine-3.10-ocaml-4.08 cancel
 ```
 
+## Web UI
+
+The public web ui runs as a separate process, accessing the backend service via CapnP. 
+Given a suitable `.cap` file from the backend service you can run the web ui against 
+the public service on `ci.ocamllabs.io` or a local development version.
+
+If you're testing the engine locally (as shown above), you can use the `./capnp-secrets/opam-repo-ci-admin.cap`
+that it writes out.    
+```
+dune exec -- ocaml-ci-web --backend ./capnp-secrets/ocaml-ci-admin.cap
+```
+Then browse to http://localhost:8090/github to see the public UI.
+
 [OCurrent]: https://github.com/ocurrent/ocurrent
 [pipeline.ml]: https://github.com/ocurrent/ocaml-ci/blob/master/service/pipeline.ml
 [capnp-api]: https://github.com/ocurrent/ocaml-ci/blob/master/api/schema.capnp
