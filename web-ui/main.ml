@@ -22,8 +22,8 @@ let handle_request ~backend _conn request _body =
     Server.respond_string ~status:`OK ~headers ~body () |> normal_response
   | `GET, ["css"; "style.css"] ->
     Style.get () |> normal_response
-  | meth, ("github" :: path) ->
-    Github.handle ~backend ~meth path
+  | meth, ("gitlab" :: path) ->
+    Gitlab.handle ~backend ~meth path
   | `GET, ("badge" :: path) ->
      Badges.handle ~backend ~path
   | _ ->
