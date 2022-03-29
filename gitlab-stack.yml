@@ -33,6 +33,9 @@ services:
       - "CI_PROFILE=production"
       - "DOCKER_BUILDKIT=1"
       - "PROGRESS_NO_TRUNC=1"
+      # Debug ocaml-gitlab 
+      # - "GITLAB_DEBUG=1"
+      # - "COHTTP_DEBUG=1"
     ports:
       - '8102:9000'
     volumes:
