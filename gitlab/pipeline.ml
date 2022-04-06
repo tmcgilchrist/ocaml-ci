@@ -19,7 +19,8 @@ let platforms =
   in
   let v2_0 = Ocaml_ci_service.Conf.platforms `V2_0 in
   let v2_1 = Ocaml_ci_service.Conf.platforms `V2_1 in
-  (* NOTE Only build on ARM and x86 available in Tezos cluster. *)
+
+  (* NOTE Build on ARM, x86 and s390x available in Tezos cluster. *)
   let plaform_list = List.filter (fun x -> match x.Ocaml_ci_service.Conf.arch with
       | `X86_64 | `I386 | `Aarch32 | `Aarch64 | `S390x -> true
       |_ -> false) (v2_0 @ v2_1) in
@@ -42,7 +43,8 @@ let gitlab_repos : Gitlab.Repo_id.t list = [
 ; { Gitlab.Repo_id.owner = "tmcgilchrist"; Gitlab.Repo_id.name = "ocaml-changes"; project_id = 30953712 }
 ; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "resto"; project_id = 16269987}  
 ; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "data-encoding"; project_id = 14134943}  
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "json-data-encoding"; project_id = 16489740}  
+; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "json-data-encoding"; project_id = 16489740}
+; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "ringo"; project_id = 15200071}
 ]
 
 (* Fake Installation module, we don't have this in GitLab. *)
@@ -52,9 +54,8 @@ module Installation = struct
   let pp f t = Fmt.string f t.name
 end
 
-(* TODO Installations should be derived from gitlab_repos or Index/DB table. *)
-let gitlab_installations = [ {Installation.name = "tmcgilchrist"}
-                           ; {Installation.name = "nomadic-labs"}]
+let gitlab_installations =
+  gitlab_repos |> List.map (fun x -> { Installation.name = x.Gitlab.Repo_id.owner }) |> List.sort_uniq Installation.compare
 
 let set_active_installations (accounts : Installation.t list Current.t) =
   let+ accounts = accounts in
