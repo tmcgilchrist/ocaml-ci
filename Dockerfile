@@ -1,9 +1,10 @@
 FROM ocaml/opam:debian-11-ocaml-4.13 AS build
 RUN sudo apt-get update && sudo apt-get install libev-dev capnproto m4 pkg-config libsqlite3-dev libgmp-dev graphviz -y --no-install-recommends
-RUN cd ~/opam-repository && git pull origin -q master && git reset --hard 78468eabce4a2e7101a82ffaa25f31a599d00f11 && opam update
+RUN cd ~/opam-repository && git pull origin -q master && git reset --hard 76354fbf4e7eea85b4a24df855d6a21e3302b6f8 && opam update
 COPY --chown=opam \
 	ocurrent/current_docker.opam \
 	ocurrent/current_github.opam \
+        ocurrent/current_gitlab.opam \
 	ocurrent/current_git.opam \
 	ocurrent/current.opam \
 	ocurrent/current_rpc.opam \
@@ -28,6 +29,7 @@ COPY --chown=opam \
 WORKDIR /src
 RUN opam pin add -yn current_docker.dev "./ocurrent" && \
     opam pin add -yn current_github.dev "./ocurrent" && \
+    opam pin add -yn current_gitlab.dev "./ocurrent" && \
     opam pin add -yn current_git.dev "./ocurrent" && \
     opam pin add -yn current.dev "./ocurrent" && \
     opam pin add -yn current_rpc.dev "./ocurrent" && \
@@ -41,7 +43,7 @@ RUN opam pin add -yn current_docker.dev "./ocurrent" && \
     opam pin add -yn matrix-ctos.dev "./ocaml-matrix" && \
     opam pin add -yn matrix-current.dev "./ocaml-matrix" && \
     opam pin add -yn ocluster-api.dev "./ocluster"
-COPY --chown=opam ocaml-ci-service.opam ocaml-ci-api.opam ocaml-ci-solver.opam /src/
+COPY --chown=opam ocaml-ci-service.opam ocaml-ci.opam ocaml-ci-gitlab.opam ocaml-ci-api.opam ocaml-ci-solver.opam /src/
 RUN opam-2.1 install -y --deps-only .
 ADD --chown=opam . .
 RUN opam-2.1 exec -- dune build ./_build/install/default/bin/ocaml-ci-service
