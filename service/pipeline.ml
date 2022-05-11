@@ -62,7 +62,6 @@ let github_status_of_state ~head result results =
   | Error (`Msg m) ->
      Github.Api.CheckRunStatus.v ~url (`Completed (`Failure m)) ~summary
 
-
 let set_active_installations installations =
   let+ installations = installations in
   installations

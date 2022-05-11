@@ -88,7 +88,7 @@
   (logs (>= 0.7.0))
   (fmt (>= 0.8.9))
   current_rpc
-  current_ansi
+  (ansi (>= 0.5.0))
   (prometheus-app (>= 1.0))
   (cmdliner (>= 1.1.0))
   lwt
@@ -108,7 +108,6 @@
   (capnp-rpc-unix (>= 1.2))
   ocaml-ci-api
   dockerfile))
-
 (package
  (name ocaml-ci-gitlab)
  (synopsis "A CI for OCaml projects on GitLab")

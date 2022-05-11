@@ -6,4 +6,4 @@ var
 *.cap
 .*.swp
 .vscode
-capnp-secrets
+/capnp-secrets/
