@@ -123,16 +123,41 @@ $ ocaml-ci mirage/irmin pull/867 alpine-3.10-ocaml-4.08 cancel
 
 ## Web UI
 
-The public web ui runs as a separate process, accessing the backend service via CapnP. 
-Given a suitable `.cap` file from the backend service you can run the web ui against 
+The public web ui runs as a separate process, accessing the backend service via CapnP.
+Given a suitable `.cap` file from the backend service you can run the web ui against
 the public service on `ci.ocamllabs.io` or a local development version.
 
 If you're testing the engine locally (as shown above), you can use the `./capnp-secrets/opam-repo-ci-admin.cap`
-that it writes out.    
-```
+that it writes out.
+
+```bash
 dune exec -- ocaml-ci-web --backend ./capnp-secrets/ocaml-ci-admin.cap
 ```
+
 Then browse to http://localhost:8090/github to see the public UI.
+
+## Deployment
+
+`ocaml-ci` is deployed as two docker images built from `Dockerfile` and `Dockerfile.web`, with
+the live service following `live-engine` for the backend and `live-www` for the frontend.
+An ocurrent-deployer [pipeline](deploy.ci3.ocamllabs.io) watches these branches, performing a docker build
+and deploy whenever it sees a new commit. The live branches should typically contain commits from `master` plus potentially
+short lived commits for testing changes that are later merged into `master`.
+
+To deploy code changes either from `master` or a branch:
+ * check that you've rebased the changes onto master
+ * git push -u upstream HEAD:live-engine or
+ * git push -u upstream HEAD:live-www
+
+To deploy changes to `stack.yml` run (assuming a docker context with sufficient access):
+
+``` bash
+docker -c ci.ocamllabs.io stack deploy -c stack.yml ocaml-ci
+```
+
+## Local development
+
+See [this document](doc/dev.md) for set up and running the server and web components locally.
 
 [OCurrent]: https://github.com/ocurrent/ocurrent
 [pipeline.ml]: https://github.com/ocurrent/ocaml-ci/blob/master/service/pipeline.ml
