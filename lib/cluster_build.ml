@@ -100,7 +100,7 @@ module Op = struct
     Current.Job.log job "Using OBuilder spec:@.%s@." spec_str;
     let build_pool = Current_ocluster.Connection.pool ~job ~pool ~action ~cache_hint ~src t.connection in
     Current.Job.start_with ~pool:build_pool job ?timeout:t.timeout ~level:Current.Level.Average >>= fun build_job ->
-    Capability.with_ref build_job (Current_ocluster.Connection.run_job ~job) >>!= fun (_ : string) ->
+    Capability.with_ref build_job (Current_ocluster.Connection.run_job ~job) >>!= fun (_, _ : string * Current_ocluster.Artifacts.t option) ->
     Lwt_result.return ()
 
   let pp f ({ Key.pool; repo; commit; label }, _) =
