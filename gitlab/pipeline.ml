@@ -28,9 +28,9 @@ let platforms =
 
 let program_name = "ocaml-ci-gitlab"
 
-(* Link for GitHub statuses. *)
-                     
-let url ~owner ~name ~hash = 
+(* Link for GitLab statuses. *)
+
+let url ~owner ~name ~hash =
   Uri.of_string (Printf.sprintf "https://gitlab.tezos.ci.dev/gitlab/%s/%s/commit/%s" owner name hash)
 
 let opam_repository_commit =

@@ -2,18 +2,17 @@
  (name ocaml_ci_gitlab)
  (public_name ocaml-ci-gitlab)
  (libraries
-   ocaml-ci
-   ocaml-ci-service
-   current
-   current_git
-   current_github
-   current_gitlab
-   current_docker
-   current_web
-   gitlab-unix
-   prometheus-app.unix
-   cmdliner)
- (modules  pipeline))
+  ocaml-ci
+  ocaml-ci-service
+  current
+  current_git
+  current_github
+  current_gitlab
+  current_docker
+  current_web
+  prometheus-app.unix
+  cmdliner)
+ (modules pipeline))
 
 (executables
  (names main)
