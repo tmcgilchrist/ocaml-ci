@@ -225,9 +225,9 @@ let v ?ocluster ~app ~solver () =
     let+ commit = head
     and+ builds = builds
     and+ status = status in
-    let repo = Current_gitlab.Api.Commit.repo_id commit in
+    let repo = Gitlab.Api.Commit.repo_id commit in
     let repo' = {Ocaml_ci.Repo_id.owner = repo.owner; name = repo.name} in
-    let hash = Current_gitlab.Api.Commit.hash commit in
+    let hash = Gitlab.Api.Commit.hash commit in
     let jobs = builds |> List.map (fun (variant, (_, job_id)) -> (variant, job_id)) in
     Index.record ~repo:repo' ~hash ~status jobs
   and set_gitlab_status =
