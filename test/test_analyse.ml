@@ -185,17 +185,11 @@ let test_simple =
     Ok {
       opam_files = [ "example.opam" ];
       selection_type = "opam";
-<<<<<<< HEAD
       selections = [
         { ocaml_version = "4.10"; only_packages = [] };
         { ocaml_version = "4.09"; only_packages = [] }
       ];
-      ocamlformat_source = Some (Opam { version = "0.12"; opam_repo_commit = "abc" });
-||||||| parent of bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
-      ocamlformat_source = Some (Opam { version = "0.12"; opam_repo_commit = "abc" });
-=======
       ocamlformat_source_type = Some (Opam { version = "0.12" });
->>>>>>> bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
     }
   in
   expect_test "simple" ~project ~expected
@@ -223,17 +217,11 @@ let test_multiple_opam =
     Ok {
       opam_files = [ "example.opam"; "example-foo.opam"; "example-bar.opam" ];
       selection_type = "opam";
-<<<<<<< HEAD
       selections = [
         { ocaml_version = "4.10"; only_packages = [] };
         { ocaml_version = "4.09"; only_packages = [] }
       ];
-      ocamlformat_source = None;
-||||||| parent of bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
-      ocamlformat_source = None;
-=======
       ocamlformat_source_type = None;
->>>>>>> bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
     }
   in
   expect_test "multiple_opam" ~project ~expected
@@ -257,7 +245,7 @@ let test_filter_packages =
         { ocaml_version = "4.10"; only_packages = [] };
         { ocaml_version = "4.09"; only_packages = ["example.dev"] };
       ];
-      ocamlformat_source = None;
+      ocamlformat_source_type = None;
     }
   in
   expect_test "filter_packages" ~project ~expected
@@ -288,14 +276,8 @@ let test_opam_monorepo =
     Ok {
       opam_files = [ "example.opam" ];
       selection_type = "opam-monorepo";
-<<<<<<< HEAD
       selections = [];
-      ocamlformat_source = None;
-||||||| parent of bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
-      ocamlformat_source = None;
-=======
       ocamlformat_source_type = None;
->>>>>>> bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
     }
   in
   expect_test "opam-monorepo" ~project ~expected
@@ -314,16 +296,10 @@ let test_opam_monorepo_no_version =
     Ok {
       opam_files = [ "example.opam" ];
       selection_type = "opam";
-<<<<<<< HEAD
       selections = [
         { ocaml_version = "4.10"; only_packages = [] };
       ];
-      ocamlformat_source = None;
-||||||| parent of bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
-      ocamlformat_source = None;
-=======
       ocamlformat_source_type = None;
->>>>>>> bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
     }
   in
   expect_test "opam-monorepo-no-version" ~project ~expected
@@ -338,17 +314,11 @@ let test_ocamlformat_self =
     Ok {
       opam_files = [ "ocamlformat.opam" ];
       selection_type = "opam";
-<<<<<<< HEAD
       selections = [
         { ocaml_version = "4.10"; only_packages = [] };
         { ocaml_version = "4.09"; only_packages = [] };
       ];
-      ocamlformat_source = Some (Vendored { path = "." });
-||||||| parent of bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
-      ocamlformat_source = Some (Vendored { path = "." });
-=======
       ocamlformat_source_type = Some (Vendored { path = "." });
->>>>>>> bad2fcb (Fix tests according to Analyse_ocamlformat.source changes)
     }
   in
   expect_test "ocamlformat_self" ~project ~expected
