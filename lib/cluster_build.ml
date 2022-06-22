@@ -61,7 +61,7 @@ module Op = struct
   let hash_packages packages =
     Digest.string (String.concat "," packages) |> Digest.to_hex
 
-  let get_cache_hint { Repo_id.owner; name } { Value.base; variant; ty } =
+  let get_cache_hint { Repo_id.owner; name; git_forge = _ } { Value.base; variant; ty } =
     let deps =
       match ty with
       | `Opam (`Build, selection, _) -> hash_packages selection.packages

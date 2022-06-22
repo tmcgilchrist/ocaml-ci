@@ -18,3 +18,10 @@ let webhook_route ~engine ~webhook_secret ~has_role =
 let login_route github_auth = Routes.(s "login" /? nil @--> Current_github.Auth.login github_auth) 
 
 let authn github_auth = Option.map Current_github.Auth.make_login_uri github_auth
+
+(* Link for GitHub statuses. *)
+let url ~owner ~name ~hash = Uri.of_string (Printf.sprintf "https://ci.ocamllabs.io/github/%s/%s/commit/%s" owner name hash)
+
+(* Link for GitHub CheckRun details. *)
+let url_variant ~owner ~name ~hash ~variant =
+  Printf.sprintf "https://ci.ocamllabs.io/github/%s/%s/commit/%s/variant/%s" owner name hash variant

@@ -21,26 +21,19 @@ let platforms =
   let v2_1 = Conf.platforms `V2_1 in
   Current.list_seq (List.map v (v2_0 @ v2_1))
 
-(* Link for GitHub statuses. *)
-let url ~owner ~name ~hash = Uri.of_string (Printf.sprintf "https://ci.ocamllabs.io/github/%s/%s/commit/%s" owner name hash)
-
-(* Link for GitHub CheckRun details. *)
-let url_variant ~owner ~name ~hash ~variant =
-  Printf.sprintf "https://ci.ocamllabs.io/github/%s/%s/commit/%s/variant/%s" owner name hash variant
-
 let opam_repository_commit =
   let repo = { Github.Repo_id.owner = "ocaml"; name = "opam-repository" } in
   Github.Api.Anonymous.head_of repo @@ `Ref "refs/heads/master"
 
-let github_status_of_state ~head result results =
+let github_status_of_state ~head result forge_url forge_url_variant results =
   let+ head = head
   and+ result = result
   and+ results = results in
   let { Github.Repo_id.owner; name } = Github.Api.Commit.repo_id head in
   let hash = Github.Api.Commit.hash head in
-  let url = url ~owner ~name ~hash in
+  let url = forge_url ~owner ~name ~hash in
   let pp_status f = function (variant, (build, _job_id)) ->
-    let job_url = url_variant ~owner ~name ~hash ~variant in
+    let job_url = forge_url_variant ~owner ~name ~hash ~variant in
     match build with
       | Ok `Checked | Ok `Built->
         Fmt.pf f "%s [%s (%s)](%s)" "✅" variant "passed" job_url
@@ -64,8 +57,11 @@ let github_status_of_state ~head result results =
 
 let set_active_installations installations =
   let+ installations = installations in
+  
   installations
-  |> List.fold_left (fun acc i -> Index.Owner_set.add (Github.Installation.account i) acc) Index.Owner_set.empty
+  |> List.fold_left (fun acc i -> 
+      let owner_id = {Index.name = (Github.Installation.account i); git_forge_prefix = "github"} in
+      Index.Owner_set.add owner_id acc) Index.Owner_set.empty
   |> Index.set_active_owners;
   installations
 
@@ -73,16 +69,18 @@ let set_active_repos ~installation repos =
   let+ installation = installation
   and+ repos = repos in
   let owner = Github.Installation.account installation in
+  let owner_id = {Index.name = owner; git_forge_prefix = "github"} in
   repos
-  |> List.fold_left (fun acc r -> Index.Repo_set.add (Github.Api.Repo.id r).name acc) Index.Repo_set.empty
-  |> Index.set_active_repos ~owner;
+  |> List.fold_left (fun acc r -> 
+      Index.Repo_set.add (Github.Api.Repo.id r).name acc) Index.Repo_set.empty
+  |> Index.set_active_repos ~owner_id;
   repos
 
 let set_active_refs ~repo xs =
   let+ repo = repo
   and+ xs = xs in
   let github_repo = Github.Api.Repo.id repo in
-  let repo = { Repo_id.owner = github_repo.owner; name = github_repo.name } in
+  let repo = { Repo_id.owner = github_repo.owner; name = github_repo.name; git_forge = Repo_id.GitHub} in
   Index.set_active_refs ~repo (
     xs |> List.fold_left (fun acc x ->
         let commit = Github.Api.Commit.id x in
@@ -100,7 +98,7 @@ let get_job_id x =
   | None -> None
 
 let build_with_docker ?ocluster ~repo ~analysis source =
-  let repo' = Current.map (fun r -> { Repo_id.owner = r.Github.Repo_id.owner; Repo_id.name = r.name }) repo in
+  let repo' = Current.map (fun r -> { Repo_id.owner = r.Github.Repo_id.owner; Repo_id.name = r.name; git_forge = Repo_id.GitHub }) repo in
   Current.with_context analysis @@ fun () ->
   let specs =
     let+ analysis = Current.state ~hidden:true analysis in
@@ -230,13 +228,13 @@ let v ?ocluster ?matrix ~app ~solver () =
     and+ builds = builds
     and+ status = status in
     let repo = Current_github.Api.Commit.repo_id commit in
-    let repo' = {Ocaml_ci.Repo_id.owner = repo.owner; name = repo.name} in
+    let repo' = {Ocaml_ci.Repo_id.owner = repo.owner; name = repo.name; git_forge = Repo_id.GitHub} in
     let hash = Current_github.Api.Commit.hash commit in
     let jobs = builds |> List.map (fun (variant, (_, job_id)) -> (variant, job_id)) in
     Index.record ~repo:repo' ~hash ~status jobs
   and set_github_status =
     builds
-    |> github_status_of_state ~head summary
+    |> github_status_of_state ~head summary Github_forge.url Github_forge.url_variant
     |> Github.Api.CheckRun.set_status head "ocaml-ci"
   and set_matrix_status =
     match matrix, matrix_room, matrix_org_room with

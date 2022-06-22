@@ -6,7 +6,7 @@ module Index = Ocaml_ci.Index
 
 open Capnp_rpc_lwt
 
-let make_commit ~engine ~owner ~name hash =
+let make_commit ~engine ~owner ~name ~git_forge hash =
   let module Commit = Raw.Service.Commit in
   Commit.local @@ object
     inherit Commit.service
@@ -49,7 +49,7 @@ let make_commit ~engine ~owner ~name hash =
       let open Commit.Refs in
       release_param_caps ();
       let refs =
-        Index.get_active_refs { Ocaml_ci.Repo_id.owner; name }
+        Index.get_active_refs { Ocaml_ci.Repo_id.owner; name; git_forge }
         |> Index.Ref_map.bindings
         |> List.filter_map (fun (name, h) -> if h = hash then Some name else None)
       in
@@ -78,7 +78,7 @@ let to_build_status =
   | `Pending -> Pending
   | `Passed -> Passed
 
-let make_repo ~engine ~owner ~name =
+let make_repo ~engine ~owner ~name ~git_forge =
   let module Repo = Raw.Service.Repo in
   let commits = ref String_map.empty in
   (* Returned reference is borrowed. Call [inc_ref] if you need to keep it. *)
@@ -86,7 +86,7 @@ let make_repo ~engine ~owner ~name =
     match String_map.find_opt hash !commits with
     | Some x -> x
     | None ->
-      let commit = make_commit ~engine ~owner ~name hash in
+      let commit = make_commit ~engine ~owner ~name ~git_forge hash in
       commits := String_map.add hash commit !commits;
       commit
   in
@@ -97,7 +97,7 @@ let make_repo ~engine ~owner ~name =
       let open Repo.Refs in
       release_param_caps ();
       let refs =
-        Index.get_active_refs { Ocaml_ci.Repo_id.owner; name }
+        Index.get_active_refs { Ocaml_ci.Repo_id.owner; name; git_forge }
         |> Index.Ref_map.bindings
       in
       let response, results = Service.Response.create Results.init_pointer in
@@ -119,7 +119,7 @@ let make_repo ~engine ~owner ~name =
       let open Repo.CommitOfRef in
       let gref = Params.ref_get params in
       release_param_caps ();
-      let refs = Index.get_active_refs { Ocaml_ci.Repo_id.owner; name } in
+      let refs = Index.get_active_refs { Ocaml_ci.Repo_id.owner; name; git_forge } in
       match Index.Ref_map.find_opt gref refs with
       | None -> Service.fail "@[<v2>Unknown ref %S. Options are:@,%a@]" gref
                   Fmt.(Dump.list string) (List.map fst (Index.Ref_map.bindings refs))
@@ -152,7 +152,7 @@ let make_repo ~engine ~owner ~name =
       Service.fail "This method no longer exists"
   end
 
-let make_org ~engine owner =
+let make_org ~engine owner ~git_forge =
   let module Org = Raw.Service.Org in
   let repos = ref String_map.empty in
   (* Returned reference is borrowed. Call [inc_ref] if you need to keep it. *)
@@ -160,7 +160,7 @@ let make_org ~engine owner =
     match String_map.find_opt name !repos with
     | Some repo -> Some repo
     | None ->
-      let active_repos = Index.get_active_repos ~owner in
+      let active_repos = Index.get_active_repos ~owner ~git_forge in
       if Index.Repo_set.mem name active_repos then (
         let repo = make_repo ~engine ~owner ~name in
         repos := String_map.add name repo !repos;
@@ -236,4 +236,8 @@ let make_ci ~engine =
       let owners = Index.get_active_owners () |> Index.Owner_set.elements in
       Results.orgs_set_list results owners |> ignore;
       Service.return response
+
+    method all_orgs_impl _params release_param_caps =
+      let open CI.Org in
+      
   end

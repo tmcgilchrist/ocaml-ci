@@ -19,18 +19,19 @@ module Metrics = struct
     active : int;
   }
 
-  let count_repo ~owner name (acc : stats) =
-    let repo = { Ocaml_ci.Repo_id.owner; name } in
+  let count_repo ~(owner_id : Index.owner_id) name (acc : stats) =
+    (* TODO share representation of GitForge between owner_id and repo_id *)
+    let repo = { Repo_id.owner = owner_id.Index.name; name; git_forge = Repo_id.GitHub } in
     match Index.Ref_map.find_opt "refs/heads/master" (Index.get_active_refs repo) with
     | None -> acc
     | Some hash ->
-      match Index.get_status ~owner ~name ~hash with
+      match Index.get_status ~repo ~hash with
       | `Failed -> { acc with failed = acc.failed + 1 }
       | `Passed -> { acc with ok = acc.ok + 1 }
       | `Not_started | `Pending -> { acc with active = acc.active + 1 }
 
-  let count_owner owner (acc : stats) =
-    Index.Repo_set.fold (count_repo ~owner) (Index.get_active_repos ~owner) acc
+  let count_owner owner_id (acc : stats) =
+    Index.Repo_set.fold (count_repo ~owner_id) (Index.get_active_repos ~owner_id) acc
 
   let update () =
     let owners = Index.get_active_owners () in
@@ -79,16 +80,16 @@ let main () config mode app capnp_address github_auth submission_uri matrix : ('
     let ocluster = Option.map (Capnp_rpc_unix.Vat.import_exn vat) submission_uri in
     let engine = Current.Engine.create ~config (Pipeline.v ?ocluster ?matrix ~app ~solver) in
     rpc_engine_resolver |> Option.iter (fun r -> Capability.resolve_ok r (Api_impl.make_ci ~engine));
-    let authn = Github.authn github_auth in
+    let authn = Github_forge.authn github_auth in
     let webhook_secret = Current_github.App.webhook_secret app in
     let has_role =
       if github_auth = None then Current_web.Site.allow_all
-      else Github.has_role
+      else Github_forge.has_role
     in
     let secure_cookies = github_auth <> None in
     let routes =
-      Github.webhook_route ~engine ~webhook_secret ~has_role ::
-      Github.login_route github_auth ::
+      Github_forge.webhook_route ~engine ~webhook_secret ~has_role ::
+      Github_forge.login_route github_auth ::
       Current_web.routes engine in
     let site = Current_web.Site.v ?authn ~has_role ~secure_cookies ~name:"ocaml-ci" routes in
     Lwt.choose [

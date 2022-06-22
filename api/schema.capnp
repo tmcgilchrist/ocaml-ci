@@ -75,11 +75,25 @@ interface Org {
   # Get the list of tracked repositories for this organisation.
 }
 
+enum GitForge {
+  github @0; # Public github.com
+  gitlab @1; # Public gitlab.com
+}
+# Extend with other Git Forge types
+
+struct OrgId {
+  name @0 :Text;
+  gitForge @1 :GitForge;
+}
+
 interface CI {
-  org          @0 (owner :Text) -> (org :Org);
+  org          @0 (owner :Text, gitForge :GitForge = github) -> (org :Org);
 
   orgs         @1 () -> (orgs :List(Text));
-  # Get the list of organisations for this CI capability.
+  # Get the list of organisations for this CI capability. 
+
+  allOrgs     @2 () -> (orgs :List(OrgId));
+  # Get all organisations for all Git Forges for this CI capability.
 }
 
 interface Log {

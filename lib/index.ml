@@ -35,26 +35,27 @@ let db = lazy (
 CREATE TABLE IF NOT EXISTS ci_build_index (
   owner     TEXT NOT NULL,
   name      TEXT NOT NULL,
+  git_forge TEXT NOT NULL,
   hash      TEXT NOT NULL,
   variant   TEXT NOT NULL,
   job_id    TEXT,
   PRIMARY KEY (owner, name, hash, variant)
 )|} |> or_fail "create table";
   let record_job = Sqlite3.prepare db "INSERT OR REPLACE INTO ci_build_index \
-                                     (owner, name, hash, variant, job_id) \
-                                     VALUES (?, ?, ?, ?, ?)" in
+                                     (owner, name, git_forge, hash, variant, job_id) \
+                                     VALUES (?, ?, ?, ?, ?, ?)" in
   let remove = Sqlite3.prepare db "DELETE FROM ci_build_index \
-                                     WHERE owner = ? AND name = ? AND hash = ? AND variant = ?" in
+                                     WHERE owner = ? AND name = ? AND git_forge = ? AND hash = ? AND variant = ?" in
   let get_jobs = Sqlite3.prepare db "SELECT ci_build_index.variant, ci_build_index.job_id, cache.ok, cache.outcome \
                                      FROM ci_build_index \
                                      LEFT JOIN cache ON ci_build_index.job_id = cache.job_id \
-                                     WHERE ci_build_index.owner = ? AND ci_build_index.name = ? AND ci_build_index.hash = ?" in
+                                     WHERE ci_build_index.owner = ? AND ci_build_index.name = ? AND ci_build_index.git_forge = ? AND ci_build_index.hash = ?" in
   let get_job = Sqlite3.prepare db "SELECT job_id FROM ci_build_index \
-                                     WHERE owner = ? AND name = ? AND hash = ? AND variant = ?" in
+                                     WHERE owner = ? AND name = ? AND git_forge = ? AND hash = ? AND variant = ?" in
   let get_job_ids = Sqlite3.prepare db "SELECT variant, job_id FROM ci_build_index \
-                                     WHERE owner = ? AND name = ? AND hash = ?" in
+                                     WHERE owner = ? AND name = ? AND git_forge = ? AND hash = ?" in
   let full_hash = Sqlite3.prepare db "SELECT DISTINCT hash FROM ci_build_index \
-                                      WHERE owner = ? AND name = ? AND hash LIKE ?" in
+                                      WHERE owner = ? AND name = ? AND git_forge = ? AND hash LIKE ?" in
       {
         db;
         record_job;
@@ -68,8 +69,8 @@ CREATE TABLE IF NOT EXISTS ci_build_index (
 
 let init () = ignore (Lazy.force db)
 
-let get_job_ids t ~owner ~name ~hash =
-  Db.query t.get_job_ids Sqlite3.Data.[ TEXT owner; TEXT name; TEXT hash ]
+let get_job_ids t ~owner ~name ~git_forge ~hash =
+  Db.query t.get_job_ids Sqlite3.Data.[ TEXT owner; TEXT name; TEXT git_forge; TEXT hash ]
   |> List.map @@ function
   | Sqlite3.Data.[ TEXT variant; NULL ] -> variant, None
   | Sqlite3.Data.[ TEXT variant; TEXT id ] -> variant, Some id
@@ -81,25 +82,27 @@ module Status_cache = struct
 
   type elt = [ `Not_started | `Pending | `Failed | `Passed ]
 
-  let add ~owner ~name ~hash (status : elt) =
+  let add ~owner ~name ~git_forge ~hash (status : elt) =
     if Hashtbl.length cache > cache_max_size then Hashtbl.clear cache;
-    Hashtbl.add cache (owner, name, hash) status
+    Hashtbl.add cache (owner, name, git_forge, hash) status
 
-  let find ~owner ~name ~hash : elt =
-    Hashtbl.find_opt cache (owner, name, hash)
+  let find ~owner ~name ~git_forge ~hash : elt =
+    Hashtbl.find_opt cache (owner, name, git_forge, hash)
     |> function
       | Some s -> s
       | None -> `Not_started
 end
 
-let get_status = Status_cache.find
+let get_status ~repo ~hash = 
+  let { Repo_id.owner; name; git_forge } = repo in
+  Status_cache.find ~owner ~name ~git_forge ~hash
 
 let record ~repo ~hash ~status jobs =
-  let { Repo_id.owner; name } = repo in
+  let { Repo_id.owner; name; git_forge } = repo in
   let t = Lazy.force db in
-  let () = Status_cache.add ~owner ~name ~hash status in
+  let () = Status_cache.add ~owner ~name ~git_forge ~hash status in
   let jobs = Job_map.of_list jobs in
-  let previous = get_job_ids t ~owner ~name ~hash |> Job_map.of_list in
+  let previous = get_job_ids t ~owner ~name ~git_forge:(Repo_id.string_of_git_forge git_forge) ~hash |> Job_map.of_list in
   let merge variant prev job =
     let set job_id =
       Log.info (fun f -> f "@[<h>Index.record %s/%s %s %s -> %a@]"
@@ -130,19 +133,23 @@ let record ~repo ~hash ~status jobs =
   let _ : [`Empty] Job_map.t = Job_map.merge merge previous jobs in
   ()
 
-let get_full_hash ~owner ~name short_hash =
+let get_full_hash ~repo short_hash =
   let t = Lazy.force db in
   if is_valid_hash short_hash then (
-    match Db.query t.full_hash Sqlite3.Data.[ TEXT owner; TEXT name; TEXT (short_hash ^ "%") ] with
+    let { Repo_id.owner; name; git_forge } = repo in
+    let git_forge = Repo_id.string_of_git_forge git_forge in
+    match Db.query t.full_hash Sqlite3.Data.[ TEXT owner; TEXT name; TEXT git_forge; TEXT (short_hash ^ "%") ] with
     | [] -> Error `Unknown
     | [Sqlite3.Data.[ TEXT hash ]] -> Ok hash
     | [_] -> failwith "full_hash: invalid result!"
     | _ :: _ :: _ -> Error `Ambiguous
   ) else Error `Invalid
 
-let get_jobs ~owner ~name hash =
+let get_jobs ~repo hash =
   let t = Lazy.force db in
-  Db.query t.get_jobs Sqlite3.Data.[ TEXT owner; TEXT name; TEXT hash ]
+  let { Repo_id.owner; name; git_forge } = repo in
+  let git_forge = Repo_id.string_of_git_forge git_forge in
+  Db.query t.get_jobs Sqlite3.Data.[ TEXT owner; TEXT name; TEXT git_forge; TEXT hash ]
   |> List.map @@ function
   | Sqlite3.Data.[ TEXT variant; TEXT job_id; NULL; NULL ] ->
     let outcome = if Current.Job.lookup_running job_id = None then `Aborted else `Active in
@@ -157,26 +164,40 @@ let get_jobs ~owner ~name hash =
   | row ->
     Fmt.failwith "get_jobs: invalid result: %a" Db.dump_row row
 
-let get_job ~owner ~name ~hash ~variant =
+let get_job ~repo ~hash ~variant =
   let t = Lazy.force db in
-  match Db.query_some t.get_job Sqlite3.Data.[ TEXT owner; TEXT name; TEXT hash; TEXT variant ] with
+  let { Repo_id.owner; name; git_forge } = repo in
+  let git_forge = Repo_id.string_of_git_forge git_forge in
+
+  match Db.query_some t.get_job Sqlite3.Data.[ TEXT owner; TEXT name; TEXT git_forge; TEXT hash; TEXT variant ] with
   | None -> Error `No_such_variant
   | Some Sqlite3.Data.[ TEXT id ] -> Ok (Some id)
   | Some Sqlite3.Data.[ NULL ] -> Ok None
   | _ -> failwith "get_job: invalid result!"
 
-module Owner_set = Set.Make(String)
+(* TODO Make this a module with type t and compare and pp functions *)
+type owner_id = { name: string; git_forge_prefix: string }
+
+module Owner_set = Set.Make(struct
+    type t = owner_id
+    let compare = compare
+  end)
 
 let active_owners = ref Owner_set.empty
 let set_active_owners x = active_owners := x
 let get_active_owners () = !active_owners
 
-module Owner_map = Map.Make(String)
+
+
+module Owner_map = Map.Make(struct
+    type t = owner_id
+    let compare = compare
+  end)
 module Repo_set = Set.Make(String)
 
 let active_repos = ref Owner_map.empty
-let set_active_repos ~owner x = active_repos := Owner_map.add owner x !active_repos
-let get_active_repos ~owner = Owner_map.find_opt owner !active_repos |> Option.value ~default:Repo_set.empty
+let set_active_repos ~owner_id x = active_repos := Owner_map.add owner_id x !active_repos
+let get_active_repos ~owner_id = Owner_map.find_opt owner_id !active_repos |> Option.value ~default:Repo_set.empty
 
 module Repo_map = Map.Make(Repo_id)
 module Ref_map = Map.Make(String)

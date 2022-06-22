@@ -1,5 +1,3 @@
-(* let url = Uri.of_string "https://gitlab.ci.ocamllabs.io" *)
-
 open Lwt.Infix
 open Capnp_rpc_lwt
 
@@ -21,18 +19,19 @@ module Metrics = struct
     active : int;
   }
 
-  let count_repo ~owner name (acc : stats) =
-    let repo = { Repo_id.owner; name } in
+  let count_repo ~owner_id name (acc : stats) =
+    (* TODO share representation of GitForge between owner_id and repo_id *)
+    let repo = { Repo_id.owner = owner_id.Index.name ; name; git_forge = Repo_id.GitLab } in
     match Index.Ref_map.find_opt "refs/heads/master" (Index.get_active_refs repo) with
     | None -> acc
     | Some hash ->
-      match Index.get_status ~owner ~name ~hash with
+      match Index.get_status ~repo ~hash with
       | `Failed -> { acc with failed = acc.failed + 1 }
       | `Passed -> { acc with ok = acc.ok + 1 }
       | `Not_started | `Pending -> { acc with active = acc.active + 1 }
 
-  let count_owner owner (acc : stats) =
-    Index.Repo_set.fold (count_repo ~owner) (Index.get_active_repos ~owner) acc
+  let count_owner owner_id (acc : stats) =
+    Index.Repo_set.fold (count_repo ~owner_id) (Index.get_active_repos ~owner_id) acc
 
   let update () =
     let owners = Index.get_active_owners () in

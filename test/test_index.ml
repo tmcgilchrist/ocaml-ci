@@ -8,7 +8,7 @@ let jobs =
 let test_simple () =
   let owner = "owner" in
   let name = "name" in
-  let repo = { Ocaml_ci.Repo_id.owner; name } in
+  let repo = { Ocaml_ci.Repo_id.owner; name; git_forge = Ocaml_ci.Repo_id.GitHub } in
   let hash = "abc" in
   let db = Lazy.force Current.Db.v in
   Index.init ();
@@ -18,14 +18,14 @@ let test_simple () =
   Index.record ~repo ~hash ~status:`Pending [ "analysis", Some "job1";
                              "alpine", None ];
   Alcotest.(check (list (pair string string))) "Refs" ["master", hash] (Index.get_active_refs repo |> Ref_map.bindings);
-  Alcotest.(check jobs) "Jobs" ["alpine", `Not_started; "analysis", `Passed] @@ Index.get_jobs ~owner ~name hash;
+  Alcotest.(check jobs) "Jobs" ["alpine", `Not_started; "analysis", `Passed] @@ Index.get_jobs ~repo hash;
   Current.Db.exec_literal db "INSERT INTO cache (op, key, job_id, value, ok, outcome, ready, running, finished, build)
                                      VALUES ('test', x'01', 'job2', x'01', 0, x'21', '2019-11-01 9:03', '2019-11-01 9:04', '2019-11-01 9:05', 0)";
   Index.record ~repo ~hash ~status:`Failed [ "analysis", Some "job1";
                              "alpine", Some "job2" ];
-  Alcotest.(check jobs) "Jobs" ["alpine", `Failed "!"; "analysis", `Passed] @@ Index.get_jobs ~owner ~name hash;
+  Alcotest.(check jobs) "Jobs" ["alpine", `Failed "!"; "analysis", `Passed] @@ Index.get_jobs ~repo hash;
   Index.record ~repo ~hash ~status:`Passed [ "analysis", Some "job1" ];
-  Alcotest.(check jobs) "Jobs" ["analysis", `Passed] @@ Index.get_jobs ~owner ~name hash
+  Alcotest.(check jobs) "Jobs" ["analysis", `Passed] @@ Index.get_jobs ~repo hash
 
 let tests = [
     Alcotest_lwt.test_case_sync "simple" `Quick test_simple;

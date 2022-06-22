@@ -53,25 +53,29 @@ module Installation = struct
   let pp f t = Fmt.string f t.name
 end
 
+let installations =[{Installation.name = "tmcgilchrist"}; {Installation.name = "nomadic-labs"}]
+
 let set_active_installations (accounts : Installation.t list Current.t) =
   let+ accounts = accounts in
   accounts
-  |> List.fold_left (fun acc i -> Index.Owner_set.add i.Installation.name acc) Index.Owner_set.empty
+  |> List.fold_left (fun acc i -> let owner_id = {Index.name = i.Installation.name; git_forge_prefix = "gitlab"} in 
+                      Index.Owner_set.add owner_id acc) Index.Owner_set.empty
   |> Index.set_active_owners;
   accounts
 
 let set_active_repos ~(installation : Installation.t Current.t) (repos : Gitlab.Repo_id.t list Current.t) =
   let+ repos = repos
   and+ installation = installation in
+  let owner_id = {Index.name = installation.Installation.name; git_forge_prefix = "gitlab"} in
   repos
   |> List.fold_left (fun acc r -> Index.Repo_set.add r.Gitlab.Repo_id.name acc) Index.Repo_set.empty
-  |> Index.set_active_repos ~owner:installation.Installation.name;
+  |> Index.set_active_repos ~owner_id;
   repos
 
 let set_active_refs ~(repo : Gitlab.Repo_id.t Current.t) xs =
   let+ repo = repo
   and+ xs = xs in
-  let repo' = { Repo_id.owner = repo.owner; name = repo.name } in
+  let repo' = { Repo_id.owner = repo.owner; name = repo.name; git_forge = Repo_id.GitLab} in
   Index.set_active_refs ~repo:repo' (
     xs |> List.fold_left (fun acc x ->
         let commit = Gitlab.Api.Commit.id x in
@@ -89,7 +93,7 @@ let get_job_id x =
   | None -> None
 
 let build_with_docker ?ocluster ~repo ~analysis source =
-  let repo' = Current.map (fun r -> { Repo_id.owner = r.Gitlab.Repo_id.owner; Repo_id.name = r.name }) repo in
+  let repo' = Current.map (fun r -> { Repo_id.owner = r.Gitlab.Repo_id.owner; Repo_id.name = r.name; git_forge = Repo_id.GitLab }) repo in
   Current.with_context analysis @@ fun () ->
   let specs =
     let+ analysis = Current.state ~hidden:true analysis in
@@ -189,7 +193,7 @@ let v ?ocluster ~app ~solver () =
   let ocluster = Option.map (Cluster_build.config ~timeout:(Duration.of_hour 1)) ocluster in
   Current.with_context opam_repository_commit @@ fun () ->
   Current.with_context platforms @@ fun () ->
-  let installations = Current.return [{Installation.name = "tmcgilchrist"}] |> set_active_installations in
+  let installations = Current.return installations |> set_active_installations in
   installations |> Current.list_iter ~collapse_key:"org" (module Installation) @@ fun installation ->
   let repos = repositories installation |> set_active_repos ~installation in
   repos |> Current.list_iter ~collapse_key:"repo" (module Gitlab.Repo_id) @@ fun repo ->
@@ -216,11 +220,12 @@ let v ?ocluster ~app ~solver () =
     let+ commit = head
     and+ builds = builds
     and+ status = status in
-    let repo = Gitlab.Api.Commit.repo_id commit in
-    let repo' = {Ocaml_ci.Repo_id.owner = repo.owner; name = repo.name} in
+    let repo = Gitlab.Api.Commit.repo_id commit
+               |> fun repo -> { Ocaml_ci.Repo_id.owner = repo.owner; name = repo.name; git_forge = Repo_id.GitHub } in
+
     let hash = Gitlab.Api.Commit.hash commit in
     let jobs = builds |> List.map (fun (variant, (_, job_id)) -> (variant, job_id)) in
-    Index.record ~repo:repo' ~hash ~status jobs
+    Index.record ~repo ~hash ~status jobs
   and set_gitlab_status =
     gitlab_status_of_state head summary
     |> Gitlab.Api.Commit.set_status head "ocaml-ci-gitlab"

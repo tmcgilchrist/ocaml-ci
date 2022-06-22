@@ -7,8 +7,10 @@ let check_safe s =
     Fmt.failwith "Unsafe characters in %S" s
 
 let for_repo repo =
-  let { Repo_id.owner; name } = repo in
+  let { Repo_id.owner; name; git_forge} = repo in
+  let git_forge = (Repo_id.string_of_git_forge git_forge) in
   check_safe owner;
   check_safe name;
-  let name = Printf.sprintf "dune:%s:%s" owner name in
+  check_safe git_forge;
+  let name = Printf.sprintf "dune:%s:%s:%s" git_forge owner name in
   Obuilder_spec.Cache.v name ~target:"/src/_build" ~buildkit_options:["sharing", "private"]

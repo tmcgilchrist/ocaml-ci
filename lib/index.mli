@@ -18,23 +18,27 @@ val record :
   unit
 (** [record ~repo ~hash jobs] updates the entry for [repo, hash] to point at [jobs]. *)
 
-val get_jobs : owner:string -> name:string -> string -> (string * job_state) list
-(** [get_jobs ~owner ~name commit] is the last known set of OCurrent jobs for hash [commit] in repository [owner/name]. *)
+val get_jobs : repo:Repo_id.t -> string -> (string * job_state) list
+(** [get_jobs ~repo commit] is the last known set of OCurrent jobs for hash [commit] in repository [Repo_id.t]. *)
 
-val get_job : owner:string -> name:string -> hash:string -> variant:string -> (string option, [> `No_such_variant]) result
-(** [get_job ~owner ~name ~variant] is the last known job ID for this combination. *)
+val get_job : repo:Repo_id.t -> hash:string -> variant:string -> (string option, [> `No_such_variant]) result
+(** [get_job ~repo ~variant] is the last known job ID for this combination. *)
 
 val get_status:
-  owner:string ->
-  name:string ->
+  repo:Repo_id.t ->
   hash:string ->
   build_status
-(** [get_status ~owner ~name ~hash] is the latest status for this combination. *)
+(** [get_status ~repo ~hash] is the latest status for this combination. *)
 
-val get_full_hash : owner:string -> name:string -> string -> (string, [> `Ambiguous | `Unknown | `Invalid]) result
-(** [get_full_hash ~owner ~name short_hash] returns the full hash for [short_hash]. *)
+val get_full_hash : repo:Repo_id.t -> string -> (string, [> `Ambiguous | `Unknown | `Invalid]) result
+(** [get_full_hash ~repo short_hash] returns the full hash for [short_hash]. *)
 
-module Owner_set : Set.S with type elt = string
+type owner_id = { name: string; git_forge_prefix: string }
+(* Owner_id as a combination of git forge and name
+   e.g. github:tmcgilchrist or gitlab:tmcgilchrist 
+*)
+                
+module Owner_set : Set.S with type elt = owner_id
 module Repo_set : Set.S with type elt = string
 
 val set_active_owners : Owner_set.t -> unit
@@ -44,11 +48,11 @@ val set_active_owners : Owner_set.t -> unit
 val get_active_owners : unit -> Owner_set.t
 (** [get_active_owners ()] is the last value passed to [set_active_owners], or [[]] if not known yet. *)
 
-val set_active_repos : owner:string -> Repo_set.t -> unit
-(** [set_active_repos ~owner repos] records that [repos] is the set of active repositories under [owner]. *)
+val set_active_repos : owner_id:owner_id -> Repo_set.t -> unit
+(** [set_active_repos ~owner_id repos] records that [repos] is the set of active repositories under [owner_id]. *)
 
-val get_active_repos : owner:string -> Repo_set.t
-(** [get_active_repos ~owner] is the last value passed to [set_active_repos] for [owner], or [empty] if not known yet. *)
+val get_active_repos : owner_id:owner_id -> Repo_set.t
+(** [get_active_repos ~owner_id] is the last value passed to [set_active_repos] for [owner_id], or [empty] if not known yet. *)
 
 module Ref_map : Map.S with type key = string
 
