@@ -60,14 +60,6 @@ open Cmdliner
 let setup_log =
   Term.(const setup_log $ Logs_cli.level ())
 
-let worker_pool =
-  Arg.value @@
-  Arg.opt Arg.(some int) None @@
-  Arg.info 
-    ~doc:"Number of solver workers in the solver pool"
-    ~docv:"SOLVER_WORKER_POOL"
-    ["worker-pool"]
-
 let worker_hash =
   Arg.value @@
   Arg.opt Arg.(some string) None @@

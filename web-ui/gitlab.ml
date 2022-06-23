@@ -290,15 +290,25 @@ let repo_handle ~meth ~owner ~name ~repo path =
   | _ ->
     Server.respond_not_found () |> normal_response
 
-let format_org org =
+let format_git_forge = 
+  let open Ocaml_ci_api.Raw.Reader.GitForge in
+  function
+  | Github -> "github"
+  | Gitlab -> "gitlab"
+  | Undefined x -> string_of_int x
+
+let format_org (org_id : Ocaml_ci_api.Raw.Reader.OrgId.t) =
+  let module OrgId = Ocaml_ci_api.Raw.Reader.OrgId in
   let open Tyxml.Html in
-  li [a ~a:[a_href (org_url org)] [txt org]]
+  li [a ~a:[a_href (org_url (OrgId.name_get org_id))] [txt (Fmt.str "%s/%s" (format_git_forge @@ OrgId.git_forge_get org_id) (OrgId.name_get org_id))]]
 
 let list_orgs ci =
-  Client.CI.orgs ci >>!= fun orgs ->
+  Client.CI.all_orgs ci >>!= fun orgs ->
+  let module OrgId = Ocaml_ci_api.Raw.Reader.OrgId in
+  let orgs_f = List.filter (fun x -> OrgId.git_forge_get x == Ocaml_ci_api.Raw.Reader.GitForge.Gitlab) orgs in
   let body = Template.instance Tyxml.Html.[
       breadcrumbs [] "gitlab";
-      ul (List.map format_org orgs)
+      ul (List.map format_org orgs_f)
     ] in
   Server.respond_string ~status:`OK ~body () |> normal_response
 
@@ -320,9 +330,9 @@ let handle ~backend ~meth path =
   Backend.ci backend >>= fun ci ->
   match meth, path with
   | `GET, [] -> list_orgs ci
-  | `GET, [owner] -> Capability.with_ref (Client.CI.org ci owner) @@ list_repos ~owner
+  | `GET, [owner] -> Capability.with_ref (Client.CI.org ci owner Client.GitLab) @@ list_repos ~owner
   | meth, (owner :: name :: path) ->
-    Capability.with_ref (Client.CI.org ci owner) @@ fun org ->
+    Capability.with_ref (Client.CI.org ci owner Client.GitLab) @@ fun org ->
     Capability.with_ref (Client.Org.repo org name) @@ fun repo ->
     repo_handle ~meth ~owner ~name ~repo path
   | _ ->

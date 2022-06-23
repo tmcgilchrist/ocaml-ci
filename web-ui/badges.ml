@@ -72,8 +72,9 @@ let handle ~backend ~path =
   let* ci = Backend.ci backend in
   match path with
   | [ org_name; repo_name; branch_name ] ->
+     (* TODO Assumes all GitHub badges, possibly should handle GitLab build badges? *)
       let ref_name = Fmt.str "refs/heads/%s" branch_name in
-      Capability.with_ref (Client.CI.org ci org_name) @@ fun org ->
+      Capability.with_ref (Client.CI.org ci org_name Client.GitHub) @@ fun org ->
       Capability.with_ref (Client.Org.repo org repo_name) @@ fun repo ->
       Capability.with_ref (Client.Repo.commit_of_ref repo ref_name)
       @@ fun commit ->

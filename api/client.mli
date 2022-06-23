@@ -7,6 +7,10 @@ type git_hash = string
 
 type variant = string
 
+type git_forge =
+  | GitHub
+  | GitLab
+
 module Ref_map : Map.S with type key = git_ref
 
 module Build_status : sig
@@ -77,9 +81,9 @@ module CI : sig
   type t = Raw.Client.CI.t Capability.t
   (** The top-level object for ocaml-ci. *)
 
-  val org : t -> string -> Org.t
-  (** [org t owner] is the GitHub organisation at "https://github.com/$owner".
-      It returns an error if ocaml-ci doesn't know about this organisation. *)
+  val org : t -> string -> git_forge -> Org.t
 
   val orgs : t -> (string list, [> `Capnp of Capnp_rpc.Error.t ]) Lwt_result.t
+
+  val all_orgs : t -> (Raw.Reader.OrgId.t list, [> `Capnp of Capnp_rpc.Error.t ]) Lwt_result.t
 end

@@ -103,9 +103,10 @@ let main ~ci_uri ~repo ~target ~variant ~job_op =
       match String.cut ~sep:"/" repo with
       | None ->
         let owner = repo in
-        with_ref (Client.CI.org ci owner) (list_repos ~owner)
+        (* TODO Assumes GitHub for everything, change to take a formatted owner id. *)
+        with_ref (Client.CI.org ci owner Client.GitHub) (list_repos ~owner)
       | Some (owner, name) ->
-        with_ref (Client.CI.org ci owner) @@ fun org ->
+        with_ref (Client.CI.org ci owner Client.GitHub) @@ fun org ->
         with_ref (Client.Org.repo org name) @@ fun repo ->
         match target with
         | None -> list_refs repo

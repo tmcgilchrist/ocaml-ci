@@ -19,9 +19,9 @@ module Metrics = struct
     active : int;
   }
 
-  let count_repo ~(owner_id : Index.owner_id) name (acc : stats) =
+  let count_repo ~(owner_id : Index.Owner_id.t) name (acc : stats) =
     (* TODO share representation of GitForge between owner_id and repo_id *)
-    let repo = { Repo_id.owner = owner_id.Index.name; name; git_forge = Repo_id.GitHub } in
+    let repo = { Repo_id.owner = owner_id.name; name; git_forge = Repo_id.GitHub } in
     match Index.Ref_map.find_opt "refs/heads/master" (Index.get_active_refs repo) with
     | None -> acc
     | Some hash ->
@@ -73,12 +73,15 @@ let run_capnp = function
     Lwt.return (vat, Some rpc_engine_resolver)
 
 
-let main () config mode app capnp_address github_auth submission_uri matrix : ('a, [`Msg of string]) result =
+let main () config mode app gitlab_app capnp_address github_auth submission_uri matrix : ('a, [`Msg of string]) result =
   Lwt_main.run begin
     let solver = Ocaml_ci.Solver_pool.spawn_local () in
     run_capnp capnp_address >>= fun (vat, rpc_engine_resolver) ->
     let ocluster = Option.map (Capnp_rpc_unix.Vat.import_exn vat) submission_uri in
-    let engine = Current.Engine.create ~config (Pipeline.v ?ocluster ?matrix ~app ~solver) in
+    let engine = Current.Engine.create ~config (fun () ->
+                     Current.all [ Ocaml_ci_gitlab.Pipeline.v ?ocluster ~app:gitlab_app ~solver ()
+                                 ; Pipeline.v ?ocluster ?matrix ~app ~solver ()
+                   ] ) in
     rpc_engine_resolver |> Option.iter (fun r -> Capability.resolve_ok r (Api_impl.make_ci ~engine));
     let authn = Github_forge.authn github_auth in
     let webhook_secret = Current_github.App.webhook_secret app in
@@ -88,6 +91,7 @@ let main () config mode app capnp_address github_auth submission_uri matrix : ('
     in
     let secure_cookies = github_auth <> None in
     let routes =
+      (* TODO Add webhook for GitLab *)
       Github_forge.webhook_route ~engine ~webhook_secret ~has_role ::
       Github_forge.login_route github_auth ::
       Current_web.routes engine in
@@ -132,7 +136,7 @@ let cmd =
   let info = Cmd.info "ocaml-ci-service" ~doc ~envs:[profile] in
   Cmd.v info
     Term.(term_result (const main $ setup_log $ Current.Config.cmdliner
-                       $ Current_web.cmdliner $ Current_github.App.cmdliner
+                       $ Current_web.cmdliner $ Current_github.App.cmdliner $ Current_gitlab.Api.cmdliner
                        $ capnp_address $ Current_github.Auth.cmdliner
                        $ submission_service $ Matrix_current.cmdliner))
 

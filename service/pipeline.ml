@@ -60,16 +60,18 @@ let set_active_installations installations =
   
   installations
   |> List.fold_left (fun acc i -> 
-      let owner_id = {Index.name = (Github.Installation.account i); git_forge_prefix = "github"} in
+         let owner_id = {Index.Owner_id.name = (Github.Installation.account i); git_forge = Repo_id.GitHub } in
       Index.Owner_set.add owner_id acc) Index.Owner_set.empty
+  |> Index.Owner_set.union (Index.get_active_owners ())
   |> Index.set_active_owners;
+
   installations
 
 let set_active_repos ~installation repos =
   let+ installation = installation
   and+ repos = repos in
   let owner = Github.Installation.account installation in
-  let owner_id = {Index.name = owner; git_forge_prefix = "github"} in
+  let owner_id = {Index.Owner_id.name = owner; git_forge = Repo_id.GitHub} in
   repos
   |> List.fold_left (fun acc r -> 
       Index.Repo_set.add (Github.Api.Repo.id r).name acc) Index.Repo_set.empty
@@ -207,6 +209,7 @@ let v ?ocluster ?matrix ~app ~solver () =
   let matrix_room = Matrix.get_room ~repo matrix in
   refs |> Current.list_iter (module Github.Api.Commit) @@ fun head ->
   let src = Git.fetch (Current.map Github.Api.Commit.id head) in
+
   let analysis = Analyse.examine ~solver ~platforms ~opam_repository_commit src in
   let builds =
     let repo = Current.map Github.Api.Repo.id repo in

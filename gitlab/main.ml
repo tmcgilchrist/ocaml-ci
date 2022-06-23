@@ -19,9 +19,9 @@ module Metrics = struct
     active : int;
   }
 
-  let count_repo ~owner_id name (acc : stats) =
+  let count_repo ~(owner_id : Index.Owner_id.t) name (acc : stats) =
     (* TODO share representation of GitForge between owner_id and repo_id *)
-    let repo = { Repo_id.owner = owner_id.Index.name ; name; git_forge = Repo_id.GitLab } in
+    let repo = { Repo_id.owner = owner_id.name ; name; git_forge = Repo_id.GitLab } in
     match Index.Ref_map.find_opt "refs/heads/master" (Index.get_active_refs repo) with
     | None -> acc
     | Some hash ->
@@ -145,9 +145,9 @@ let cmd =
   let doc = "Build OCaml projects on GitLab" in
   let info = Cmd.info "ocaml-ci-gitlab-service" ~doc in
   Cmd.v info 
-    Term.(term_result (const main $ setup_log $ Current.Config.cmdliner 
-                       $ Current_web.cmdliner $ capnp_address 
-                       $ Current_gitlab.Auth.cmdliner $ Current_gitlab.Api.cmdliner 
+    Term.(term_result (const main $ setup_log $ Current.Config.cmdliner
+                       $ Current_web.cmdliner $ capnp_address
+                       $ Current_gitlab.Auth.cmdliner $ Current_gitlab.Api.cmdliner
                        $ submission_service ))
 
 let () = exit @@ Cmd.eval cmd

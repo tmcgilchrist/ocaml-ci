@@ -23,7 +23,7 @@ let platforms =
 
 let program_name = "ocaml-ci-gitlab"
 
-(* Link for GitHub statuses. *)
+(* Link for Gitlab statuses. *)
 let url ~owner ~name ~hash = 
   Uri.of_string (Printf.sprintf "https://gitlab.tezos.ci.dev/gitlab/%s/%s/commit/%s" owner name hash)
 
@@ -34,16 +34,9 @@ let opam_repository_commit =
 
 (* TODO Sometime later, grab these from Index/DB table. *)
 let gitlab_repos : Gitlab.Repo_id.t list = [
-  { Gitlab.Repo_id.owner = "tmcgilchrist"; Gitlab.Repo_id.name = "ocaml-gitlab"; project_id = 29798678 }
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "resto"; project_id = 16269987}
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "data-encoding"; project_id = 14134943}
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "json-data-encoding"; project_id = 16489740}
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "ringo"; project_id = 15200071}
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "ocaml-secp256k1-internal"; project_id = 17524462}
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "lwt-exit"; project_id = 22943026}
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "lwt-watcher"; project_id = 14672501}
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "lwt-canceler"; project_id = 14702762 }
-; { Gitlab.Repo_id.owner = "nomadic-labs"; Gitlab.Repo_id.name = "ctypes_stubs_js"; project_id = 31956063 }
+    { Gitlab.Repo_id.owner = "tmcgilchrist"; Gitlab.Repo_id.name = "ocaml-gitlab"; project_id = 29798678 }
+  ; { Gitlab.Repo_id.owner = "tmcgilchrist"; Gitlab.Repo_id.name = "ocaml-changes"; project_id = 30953712 }
+  ; { Gitlab.Repo_id.owner = "talex5"; Gitlab.Repo_id.name = "gemini-eio"; project_id = 28169706 }
 ]
 
 (* Fake Installation module, we don't have this in GitLab. *)
@@ -53,20 +46,22 @@ module Installation = struct
   let pp f t = Fmt.string f t.name
 end
 
-let installations =[{Installation.name = "tmcgilchrist"}; {Installation.name = "nomadic-labs"}]
+let installations = List.map (fun x -> {Installation.name = x.Gitlab.Repo_id.owner}) gitlab_repos
 
 let set_active_installations (accounts : Installation.t list Current.t) =
   let+ accounts = accounts in
   accounts
-  |> List.fold_left (fun acc i -> let owner_id = {Index.name = i.Installation.name; git_forge_prefix = "gitlab"} in 
-                      Index.Owner_set.add owner_id acc) Index.Owner_set.empty
+  |> List.fold_left (fun acc i -> 
+         let owner_id = { Index.Owner_id.name = i.Installation.name; git_forge = Repo_id.GitLab } in 
+         Index.Owner_set.add owner_id acc) (Index.get_active_owners ())
+  |> Index.Owner_set.union (Index.get_active_owners ())
   |> Index.set_active_owners;
   accounts
 
 let set_active_repos ~(installation : Installation.t Current.t) (repos : Gitlab.Repo_id.t list Current.t) =
   let+ repos = repos
   and+ installation = installation in
-  let owner_id = {Index.name = installation.Installation.name; git_forge_prefix = "gitlab"} in
+  let owner_id = { Index.Owner_id.name = installation.Installation.name; git_forge = Repo_id.GitLab } in
   repos
   |> List.fold_left (fun acc r -> Index.Repo_set.add r.Gitlab.Repo_id.name acc) Index.Repo_set.empty
   |> Index.set_active_repos ~owner_id;
@@ -201,6 +196,7 @@ let v ?ocluster ~app ~solver () =
   let refs = Gitlab.Api.ci_refs app ~staleness:Ocaml_ci_service.Conf.max_staleness repo_id |> set_active_refs ~repo in
   refs |> Current.list_iter (module Gitlab.Api.Commit) @@ fun head ->
   let src = Git.fetch (Current.map Gitlab.Api.Commit.id head) in
+
   let analysis = Analyse.examine ~solver ~platforms ~opam_repository_commit src in
   let builds =
     build_with_docker ?ocluster ~repo ~analysis src in
@@ -221,7 +217,7 @@ let v ?ocluster ~app ~solver () =
     and+ builds = builds
     and+ status = status in
     let repo = Gitlab.Api.Commit.repo_id commit
-               |> fun repo -> { Ocaml_ci.Repo_id.owner = repo.owner; name = repo.name; git_forge = Repo_id.GitHub } in
+               |> fun repo -> { Ocaml_ci.Repo_id.owner = repo.owner; name = repo.name; git_forge = Repo_id.GitLab } in
 
     let hash = Gitlab.Api.Commit.hash commit in
     let jobs = builds |> List.map (fun (variant, (_, job_id)) -> (variant, job_id)) in

@@ -42,6 +42,7 @@
             ocaml-ci
             ocaml-ci-api
             ocaml_ci_service
+            ocaml_ci_gitlab
             prometheus-app.unix)
  (preprocess (pps ppx_deriving_yojson))
  (modules main local))

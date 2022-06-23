@@ -4,6 +4,14 @@ type git_ref = string
 type git_hash = string
 type variant = string
 
+type git_forge =
+  |  GitHub
+  | GitLab
+
+let of_git_forge = function
+  | GitHub -> Raw.GitForge_13209121721944372865.Github
+  | GitLab -> Raw.GitForge_13209121721944372865.Gitlab
+
 module Ref_map = Map.Make(String)
 
 module State = struct
@@ -41,14 +49,21 @@ type job_info = {
 module CI = struct
   type t = Raw.Client.CI.t Capability.t
 
-  let org t owner =
+  let org t owner git_forge =
     let open Raw.Client.CI.Org in
     let request, params = Capability.Request.create Params.init_pointer in
     Params.owner_set params owner;
+    Params.git_forge_set params (of_git_forge git_forge);
     Capability.call_for_caps t method_id request Results.org_get_pipelined
 
   let orgs t =
     let open Raw.Client.CI.Orgs in
+    let request = Capability.Request.create_no_args () in
+    Capability.call_for_value t method_id request
+    |> Lwt_result.map Results.orgs_get_list
+
+  let all_orgs t =
+    let open Raw.Client.CI.AllOrgs in
     let request = Capability.Request.create_no_args () in
     Capability.call_for_value t method_id request
     |> Lwt_result.map Results.orgs_get_list

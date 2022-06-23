@@ -33,12 +33,19 @@ val get_status:
 val get_full_hash : repo:Repo_id.t -> string -> (string, [> `Ambiguous | `Unknown | `Invalid]) result
 (** [get_full_hash ~repo short_hash] returns the full hash for [short_hash]. *)
 
-type owner_id = { name: string; git_forge_prefix: string }
 (* Owner_id as a combination of git forge and name
    e.g. github:tmcgilchrist or gitlab:tmcgilchrist 
-*)
+ *)
+module Owner_id : sig
+  type t = { name : string; git_forge : Repo_id.git_forge; }
+  val compare : 'a -> 'a -> int
+  val pp : Format.formatter -> t -> unit
+end
+
+val get_owners : unit -> Owner_id.t list
                 
-module Owner_set : Set.S with type elt = owner_id
+(* TODO Replace this API with a SQL table. *)
+module Owner_set : Set.S with type elt = Owner_id.t
 module Repo_set : Set.S with type elt = string
 
 val set_active_owners : Owner_set.t -> unit
@@ -48,10 +55,10 @@ val set_active_owners : Owner_set.t -> unit
 val get_active_owners : unit -> Owner_set.t
 (** [get_active_owners ()] is the last value passed to [set_active_owners], or [[]] if not known yet. *)
 
-val set_active_repos : owner_id:owner_id -> Repo_set.t -> unit
+val set_active_repos : owner_id:Owner_id.t -> Repo_set.t -> unit
 (** [set_active_repos ~owner_id repos] records that [repos] is the set of active repositories under [owner_id]. *)
 
-val get_active_repos : owner_id:owner_id -> Repo_set.t
+val get_active_repos : owner_id:Owner_id.t -> Repo_set.t
 (** [get_active_repos ~owner_id] is the last value passed to [set_active_repos] for [owner_id], or [empty] if not known yet. *)
 
 module Ref_map : Map.S with type key = string
