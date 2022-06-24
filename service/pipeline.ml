@@ -99,8 +99,7 @@ let get_job_id x =
   | Some { Current.Metadata.job_id; _ } -> job_id
   | None -> None
 
-let build_with_docker ?ocluster ~repo ~analysis source =
-  let repo' = Current.map (fun r -> { Repo_id.owner = r.Github.Repo_id.owner; Repo_id.name = r.name; git_forge = Repo_id.GitHub }) repo in
+let build_with_docker ?ocluster ~(repo : Repo_id.t Current.t) ~analysis source =
   Current.with_context analysis @@ fun () ->
   let specs =
     let+ analysis = Current.state ~hidden:true analysis in
@@ -135,10 +134,10 @@ let build_with_docker ?ocluster ~repo ~analysis source =
   let builds = specs |> Current.list_map (module Spec) (fun spec ->
       let+ result =
         match ocluster with
-        | None -> Build.v ~platforms ~repo:repo' ~spec source
+        | None -> Build.v ~platforms ~repo ~spec source
         | Some ocluster ->
           let src = Current.map Git.Commit.id source in
-          Cluster_build.v ocluster ~platforms ~repo:repo' ~spec src
+          Cluster_build.v ocluster ~platforms ~repo ~spec src
       and+ spec = spec in
       Spec.label spec, result
     ) in
@@ -185,7 +184,7 @@ let summarise results =
 
 let local_test ~solver repo () =
   let src = Git.Local.head_commit repo in
-  let repo = Current.return { Github.Repo_id.owner = "local"; name = "test" }
+  let repo = Current.return { Repo_id.owner = "local"; name = "test"; git_forge = GitHub  }
   and analysis = Analyse.examine ~solver ~platforms ~opam_repository_commit src in
   Current.component "summarise" |>
   let> results = build_with_docker ~repo ~analysis src in
@@ -196,23 +195,22 @@ let local_test ~solver repo () =
   in
   Current_incr.const (result, None)
 
-let v ?ocluster ?matrix ~app ~solver () =
-  let ocluster = Option.map (Cluster_build.config ~timeout:(Duration.of_hour 1)) ocluster in
-  Current.with_context opam_repository_commit @@ fun () ->
-  Current.with_context platforms @@ fun () ->
+let github_pipeline ?ocluster ?matrix ~app ~solver () =
   let installations = Github.App.installations app |> set_active_installations in
   installations |> Current.list_iter ~collapse_key:"org" (module Github.Installation) @@ fun installation ->
   let repos = Github.Installation.repositories installation |> set_active_repos ~installation in
+
   let matrix_org_room = Matrix.get_org_room ~installation matrix in
+
   repos |> Current.list_iter ~collapse_key:"repo" (module Github.Api.Repo) @@ fun repo ->
   let refs = Github.Api.Repo.ci_refs ~staleness:Conf.max_staleness repo |> set_active_refs ~repo in
   let matrix_room = Matrix.get_room ~repo matrix in
   refs |> Current.list_iter (module Github.Api.Commit) @@ fun head ->
   let src = Git.fetch (Current.map Github.Api.Commit.id head) in
+  let repo = Current.map (fun (_, x) -> { Repo_id.owner = x.Github.Repo_id.owner; Repo_id.name = x.Github.Repo_id.name; git_forge = Repo_id.GitHub }) repo in
 
   let analysis = Analyse.examine ~solver ~platforms ~opam_repository_commit src in
   let builds =
-    let repo = Current.map Github.Api.Repo.id repo in
     build_with_docker ?ocluster ~repo ~analysis src in
   let summary =
     builds
@@ -257,3 +255,54 @@ let v ?ocluster ?matrix ~app ~solver () =
     | _ -> assert false
   in
   Current.all [index; set_github_status; set_matrix_status]
+
+let gitlab_pipeline ?ocluster ~app ~solver () =
+  let module Gitlab = Current_gitlab in
+  let installations = Gitlab_forge.installations |> Gitlab_forge.set_active_installations  in
+  installations |> Current.list_iter ~collapse_key:"org" (module Gitlab_forge.Installation) @@ fun installation ->
+  let repos = Gitlab_forge.repositories installation |> Gitlab_forge.set_active_repos ~installation in
+
+  repos |> Current.list_iter ~collapse_key:"repo" (module Gitlab.Repo_id) @@ fun repo ->
+  let* repo_id = repo in                                                                             
+  let refs = Gitlab.Api.ci_refs app ~staleness:Conf.max_staleness repo_id |> Gitlab_forge.set_active_refs ~repo in
+  refs |> Current.list_iter (module Gitlab.Api.Commit) @@ fun head ->
+  let src = Git.fetch (Current.map Gitlab.Api.Commit.id head) in
+  let repo = Current.map (fun x -> {Repo_id.owner = x.Gitlab.Repo_id.owner; Repo_id.name = x.Gitlab.Repo_id.name; git_forge = Repo_id.GitLab}) repo in
+
+  let analysis = Analyse.examine ~solver ~platforms ~opam_repository_commit src in
+  let builds = build_with_docker ?ocluster ~repo ~analysis src in
+  let summary =
+    builds
+    |> Current.map (List.map (fun (variant, (build, _job)) -> variant, build))
+    |> Current.map summarise
+  in
+  let status =
+    let+ summary = summary in
+    match summary with
+    | Ok () -> `Passed
+    | Error (`Active `Running) -> `Pending
+    | Error (`Msg _) -> `Failed
+  in
+  let index =
+    let+ commit = head
+    and+ builds = builds
+    and+ status = status in
+    let repo = Gitlab.Api.Commit.repo_id commit
+               |> fun repo -> { Ocaml_ci.Repo_id.owner = repo.owner; name = repo.name; git_forge = Repo_id.GitLab } in
+
+    let hash = Gitlab.Api.Commit.hash commit in
+    let jobs = builds |> List.map (fun (variant, (_, job_id)) -> (variant, job_id)) in
+    Index.record ~repo ~hash ~status jobs
+  and set_gitlab_status =
+    Gitlab_forge.gitlab_status_of_state head summary
+    |> Gitlab.Api.Commit.set_status head "ocaml-ci-gitlab"
+  in
+  Current.all [index; set_gitlab_status]
+
+let main ?ocluster ?matrix ~github ~gitlab ~solver () = 
+  let ocluster = Option.map (Cluster_build.config ~timeout:(Duration.of_hour 1)) ocluster in
+  Current.with_context opam_repository_commit @@ fun () ->
+  Current.with_context platforms @@ fun () ->
+
+  Current.all_labelled [ "installation", github_pipeline ?ocluster ?matrix ~app:github ~solver ()
+                       ; "installation", gitlab_pipeline ?ocluster ~app:gitlab ~solver ()]

@@ -2,7 +2,10 @@ open Current.Syntax
 
 module Git = Current_git
 module Github = Current_github
+module Gitlab = Current_gitlab
 
+
+(* TODO These should come from the Github_forge *)
 (* Link for GitHub statuses. *)
 let url ~owner ~name ~hash = Uri.of_string (Printf.sprintf "https://ci.ocamllabs.io/github/%s/%s/commit/%s" owner name hash)
 
@@ -155,11 +158,30 @@ let get_org_room ~installation =
   in
   get_room_for ~alias
 
+let get_org_room_g ~installation =
+  let alias =
+    let+ installation = installation in
+    let account = installation.Gitlab_forge.Installation.name  in
+    (* TODO Name clash between github / gitlab *)
+    "ocaml-ci/" ^ account
+  in
+  get_room_for ~alias
+    
+
 let get_room ~repo =
   let alias =
     let+ repo = repo in
     let id = Github.Api.Repo.id repo in
     (* we rely on the fact that allowed Github repository names is a subset of allowed Matrix channel names. *)
     "ocaml-ci/" ^ id.owner ^ "/" ^ id.name
+  in
+  get_room_for ~alias
+
+let get_room_g ~repo =
+  let alias =
+    let+ repo = repo in
+    (* TODO Name clash between github / gitlab *)
+    (* we rely on the fact that allowed Github repository names is a subset of allowed Matrix channel names. *)
+    "ocaml-ci/" ^ repo.Gitlab.Repo_id.owner ^ "/" ^ repo.Gitlab.Repo_id.name
   in
   get_room_for ~alias

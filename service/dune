@@ -10,6 +10,7 @@
             current_docker
             current_git
             current_github
+            current_gitlab
             current_rpc
             dockerfile-opam
             ocluster-api
@@ -20,7 +21,7 @@
             ocaml-ci-api
             prometheus-app.unix)
  (preprocess (pps ppx_deriving_yojson))
- (modules api_impl conf github_forge pipeline matrix))
+ (modules api_impl conf github_forge gitlab_forge pipeline matrix))
 
 (executables
  (names main local)
@@ -33,6 +34,7 @@
             current_docker
             current_git
             current_github
+            current_gitlab
             current_rpc
             dockerfile-opam
             ocluster-api
@@ -42,7 +44,6 @@
             ocaml-ci
             ocaml-ci-api
             ocaml_ci_service
-            ocaml_ci_gitlab
             prometheus-app.unix)
  (preprocess (pps ppx_deriving_yojson))
  (modules main local))

@@ -147,3 +147,14 @@ See [this document](doc/dev.md) for set up and running the server and web compon
 [pipeline.ml]: https://github.com/ocurrent/ocaml-ci/blob/master/service/pipeline.ml
 [capnp-api]: https://github.com/ocurrent/ocaml-ci/blob/master/api/schema.capnp
 
+
+## TODO 
+
+ * combine pipeline steps to share as much logic as possible
+ * extract Index.Owner_set, Repo_set and Ref_map into database tables
+
+ * split up web-ui into routes / rendering / backend+rpc
+ * boundaries for ocaml-ci persistence layer, caqti?
+
+ * port web-ui to dream?
+

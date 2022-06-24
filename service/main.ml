@@ -79,9 +79,8 @@ let main () config mode app gitlab_app capnp_address github_auth submission_uri 
     run_capnp capnp_address >>= fun (vat, rpc_engine_resolver) ->
     let ocluster = Option.map (Capnp_rpc_unix.Vat.import_exn vat) submission_uri in
     let engine = Current.Engine.create ~config (fun () ->
-                     Current.all [ Ocaml_ci_gitlab.Pipeline.v ?ocluster ~app:gitlab_app ~solver ()
-                                 ; Pipeline.v ?ocluster ?matrix ~app ~solver ()
-                   ] ) in
+                     Pipeline.main ?ocluster ?matrix ~github:app ~gitlab:gitlab_app ~solver ()
+                   ) in
     rpc_engine_resolver |> Option.iter (fun r -> Capability.resolve_ok r (Api_impl.make_ci ~engine));
     let authn = Github_forge.authn github_auth in
     let webhook_secret = Current_github.App.webhook_secret app in
@@ -91,9 +90,10 @@ let main () config mode app gitlab_app capnp_address github_auth submission_uri 
     in
     let secure_cookies = github_auth <> None in
     let routes =
-      (* TODO Add webhook for GitLab *)
       Github_forge.webhook_route ~engine ~webhook_secret ~has_role ::
       Github_forge.login_route github_auth ::
+      (* TODO Add webhook for GitLab *)
+      Gitlab_forge.webhook_route ~webhook_secret ::
       Current_web.routes engine in
     let site = Current_web.Site.v ?authn ~has_role ~secure_cookies ~name:"ocaml-ci" routes in
     Lwt.choose [
