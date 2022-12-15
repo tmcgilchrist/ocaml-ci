@@ -238,7 +238,7 @@ let get_macos ~arch ~label ~builder ~pool ~distro ~ocaml_version ~opam_version
              os_distribution = "macos";
              os_version = "12.6";
              ocaml_package = "ocaml-base-compiler";
-             ocaml_version = Fmt.str "%a" Ocaml_version.pp ocaml_version;
+             ocaml_version = Fmt.str "%a~rc1" Ocaml_version.pp ocaml_version;
              opam_version = Opam_version.to_string_with_patch opam_version;
            }
          in
