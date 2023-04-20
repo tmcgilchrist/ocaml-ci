@@ -1,0 +1,118 @@
+version: "3.8"
+services:
+
+  scheduler:
+    image: ocurrent/ocluster-scheduler:live
+    command:
+      - --secrets-dir=/capnp-secrets
+      - --capnp-secret-key-file=/capnp-secrets/key.pem
+      - --capnp-listen-address=tcp:0.0.0.0:9000
+      - --capnp-public-address=tcp:scheduler:9000
+      - --pools=linux-x86_64
+      - --state-dir=/var/lib/ocluster-scheduler
+      - --default-clients=ocaml-docs-ci
+    init: true
+    ports:
+      - "9000:9000"
+    volumes:
+      - 'scheduler-data:/var/lib/ocluster-scheduler'
+      - 'capnp-secrets:/capnp-secrets'
+
+  worker:
+    # image: ocurrent/ocluster-worker:live
+    build:
+      dockerfile: docker/worker/Dockerfile
+      context: .
+    command:
+      - --connect=/capnp-secrets/pool-linux-x86_64.cap
+      - --name=ocluster-worker
+      - --allow-push=ocurrentbuilder/staging,ocurrent/opam-staging
+      - --capacity=1
+      - --state-dir=/var/lib/ocluster
+      - --store=rsync:/var/cache/obuilder
+      - --rsync-mode=hardlink
+      - --obuilder-healthcheck=0
+      - --verbose
+    init: true
+    privileged: true            # required for the Docker in Docker container to work
+    restart: on-failure         # (wait for the scheduler to write the pool cap)
+    volumes:
+      - 'worker-data:/var/lib/ocluster'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - 'capnp-secrets:/capnp-secrets:ro'
+    environment:
+      - DOCKER_BUILDKIT=1
+
+  github:
+    # image: ocurrent/ocaml-ci-service:live
+    build:
+      dockerfile: docker/gitlab/Dockerfile
+      context: .
+    command: >
+      --help
+    environment:
+      - "CI_PROFILE=production"
+      - "DOCKER_BUILDKIT=1"
+      - "PROGRESS_NO_TRUNC=1"
+    ports:
+      - '8102:9000'
+    volumes:
+      - 'data:/var/lib/ocurrent'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - 'github-capnp-secrets:/capnp-secrets'
+    secrets:
+      - 'ocaml-ci-oauth'
+      - 'ocaml-ci-github-key'
+      - 'ocaml-ci-submission.cap'
+      - 'ocaml-ci-solver.cap'
+      - 'ocaml-ci-webhook-secret'
+    sysctls:
+      - 'net.ipv4.tcp_keepalive_time=60'
+
+  gitlab:
+    # image: ocurrent/ocaml-ci-gitlab-service:live
+    build:
+      dockerfile: docker/gitlab/Dockerfile
+      context: .
+    command: >
+      --help
+    environment:
+      - "CI_PROFILE=production"
+      - "DOCKER_BUILDKIT=1"
+      - "PROGRESS_NO_TRUNC=1"
+    ports:
+      - '8202:9000'
+    volumes:
+      - 'gitlab-data:/var/lib/ocurrent'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - 'gitlab-capnp-secrets:/capnp-secrets'
+    secrets:
+      - 'ocaml-ci-gitlab-oauth'
+      - 'ocaml-ci-gitlab-token'
+      - 'ocaml-ci-submission.cap'
+      - 'ocaml-ci-solver.cap'
+      - 'ocaml-ci-gitlab-webhook-secret'
+    sysctls:
+      - 'net.ipv4.tcp_keepalive_time=60'
+
+  web:
+    # image: ocurrent/ocaml-ci-web:live
+    build:
+      dockerfile: docker/www/Dockerfile
+    command: >
+      --backend /capnp-secrets/github/ocaml-ci-admin.cap
+      --gitlab-backend /capnp-secrets/gitlab/ocaml-ci-admin.cap
+      --listen-prometheus=9090
+    volumes:
+      - 'github-capnp-secrets:/capnp-secrets/github:ro'
+      - 'gitlab-capnp-secrets:/capnp-secrets/gitlab:ro'
+    sysctls:
+      - 'net.ipv4.tcp_keepalive_time=60'
+volumes:
+  ocaml-docs-ci-data:
+  worker-data:
+  scheduler-data:
+  github-capnp-secrets:
+  gitlab-capnp-secrets:
+  docs-data:
+  ssh-credentials:
